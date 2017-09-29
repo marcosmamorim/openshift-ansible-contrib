@@ -1,11 +1,11 @@
 ---
 
-- name: Remove workflow-ocp-aws-install
-  command: tower-cli workflow delete --name="workflow-ocp-aws-install"
+- name: Remove workflow-ocp-osp-install
+  command: tower-cli workflow delete --name="workflow-osp-aws-install"
 
-- name: Remove aws-openshift-install job template
+- name: Remove osp-openshift-install job template
   tower_job_template:
-    name: aws-openshift-install
+    name: osp-openshift-install
     job_type: run
     project: openshift-ansible-contrib
     playbook: "reference-architecture/aws-ansible/playbooks/openshift-install.yaml"
@@ -14,7 +14,7 @@
 
 - name: Remove infrastructure job template
   tower_job_template:
-    name: aws-infrastructure
+    name: osp-infrastructure
     job_type: run
     project: openshift-ansible-contrib
     playbook: "reference-architecture/aws-ansible/playbooks/infrastructure.yaml"
@@ -41,10 +41,11 @@
 
 - name: Remove tower group
   tower_group:
-    name: aws
-    inventory: "aws-inventory"
+    name: osp
+    inventory: "osp-inventory"
     state: absent
     tower_config_file: "~/.tower_cli.cfg"
+  ignore_errors: True
 
 - name: Remove tower inventory
   tower_inventory:
@@ -55,7 +56,7 @@
 
 - name: Remove tower credential for machine
   tower_credential:
-    name: aws-privkey
+    name: osp-privkey
     kind: ssh
     organization: "Default"
     state: absent
@@ -63,9 +64,9 @@
 
 - name: Remove tower credential for aws
   tower_credential:
-    name: ec2
+    name: openstack
     state: absent
-    kind: aws
+    kind: openstack
     organization: "Default"
     tower_config_file: "~/.tower_cli.cfg"
 
