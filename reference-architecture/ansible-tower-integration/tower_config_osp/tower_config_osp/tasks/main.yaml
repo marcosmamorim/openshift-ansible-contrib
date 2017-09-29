@@ -64,80 +64,109 @@
     state: present
   become: true
 
+- name: Install python-openstackclient
+  yum:
+    name: python-openstackclient
+    state: present
+  become: true
+
+- name: Install bind-utils
+  yum:
+    name: bind-utils
+    state: present
+  become: true
+
+#TODO: Create tower_cli.cfg before start the Tower configuration
+
 - name: Create tower organization
   tower_organization:
     name: "Default"
     description: "Set to Default since the trial license only allows one organization. You can change it if you have deep pockets"
     state: present
-    tower_config_file: "~/.tower_cli.cfg"
 
 - name: Add tower project for openshift-ansible-contrib
   tower_project:
     name: "openshift-ansible-contrib"
     description: "sync openshift-ansible-contrib"
     organization: "Default"
-    scm_url: https://github.com/strategicdesignteam/openshift-ansible-contrib.git
+    scm_url: https://github.com/marcosmamorim/openshift-ansible-contrib.git
     scm_type: git
-    scm_branch: master
+    scm_branch: tower-osp
     scm_update_on_launch: true
     state: present
     tower_config_file: "~/.tower_cli.cfg"
 
-- name: Add tower project for ansible-redhat-access-insights-client
+- name: Add tower project for openshift-on-openstack
   tower_project:
-    name: "ansible-redhat-access-insights-client"
-    description: "sync ansible-redhat-access-insights-client"
+    name: "openshift-on-openstack"
+    description: "sync openshift-on-openstack"
     organization: "Default"
-    scm_url: https://github.com/strategicdesignteam/ansible-redhat-access-insights-client.git
+    scm_url: https://github.com/marcosmamorim/openshift-on-openstack.git
     scm_type: git
-    scm_branch: master
+    scm_branch: mamorim
     scm_update_on_launch: true
     state: present
     tower_config_file: "~/.tower_cli.cfg"
 
-- name: Add tower project for cfme-ansible
-  tower_project:
-    name: "cfme-ansible"
-    description: "sync cfme-ansible"
-    organization: "Default"
-    scm_url: https://github.com/strategicdesignteam/cfme-ansible.git
-    scm_type: git
-    scm_branch: master
-    scm_update_on_launch: true
-    state: present
-    tower_config_file: "~/.tower_cli.cfg"
+#- name: Add tower project for ansible-redhat-access-insights-client
+#  tower_project:
+#    name: "ansible-redhat-access-insights-client"
+#    description: "sync ansible-redhat-access-insights-client"
+#    organization: "Default"
+#    scm_url: https://github.com/strategicdesignteam/ansible-redhat-access-insights-client.git
+#    scm_type: git
+#    scm_branch: master
+#    scm_update_on_launch: true
+#    state: present
+#    tower_config_file: "~/.tower_cli.cfg"
+
+#- name: Add tower project for cfme-ansible
+#  tower_project:
+#    name: "cfme-ansible"
+#    description: "sync cfme-ansible"
+#    organization: "Default"
+#    scm_url: https://github.com/strategicdesignteam/cfme-ansible.git
+#    scm_type: git
+#    scm_branch: master
+#    scm_update_on_launch: true
+#    state: present
+#    tower_config_file: "~/.tower_cli.cfg"
 
 - name: Sync project openshift-ansible-contrib
   command: tower-cli project update -n openshift-ansible-contrib
 
-- name: Sync project ansible-redhat-access-insights-client
-  command: tower-cli project update -n ansible-redhat-access-insights-client
+- name: Sync project openshift-on-openstack
+  command: tower-cli project update -n openshift-on-openstack
 
-- name: Sync project cfme-ansible
-  command: tower-cli project update -n cfme-ansible
+#- name: Sync project ansible-redhat-access-insights-client
+#  command: tower-cli project update -n ansible-redhat-access-insights-client
+#
+#- name: Sync project cfme-ansible
+#  command: tower-cli project update -n cfme-ansible
 
 - name: Add tower credential for machine
   tower_credential:
-    name: aws-privkey
+    name: osp-privkey
     kind: ssh
     become_method: sudo
-    description: aws-privkey
+    description: osp-privkey
     organization: "Default"
     state: present
-    ssh_key_data: "{{ OS_SSH_KEY }}"
-    username: ec2-user
+    ssh_key_data: "{{ OS_MACHINE_KEY }}"
+    username: cloud-user
     tower_config_file: "~/.tower_cli.cfg"
 
 - name: Add tower credential for osp
   tower_credential:
-    name: OpenStack
+    name: openstack
     kind: openstack
     description: OpenStack
     organization: "Default"
     state: present
     username: "{{ OS_USERNAME }}"
     password: "{{ OS_PASSWORD }}"
-    domain: "{{ OS_PROJECT_NAME }}"
+    project: "{{ OS_PROJECT_NAME }}"
+    host: "{{ OS_AUTH_URL }}"
     tower_config_file: "~/.tower_cli.cfg"
 
 - name: Add tower inventory
@@ -150,12 +179,12 @@
 
 - name: Add tower group
   tower_group:
-    name: aws
+    name: osp
     description: "Tower Group for OSP"
     source: openstack
-    credential: OpenStack
+    credential: openstack
     inventory: "osp-inventory"
-#    source_vars:
+    source_vars:
 #      regions: all
 #      regions_exclude: us-gov-west-1,cn-north-1
 #      vpc_destination_variable: private_ip_address
@@ -163,6 +192,19 @@
 #      rds: False
 #      elasticache: False
 #      hostname_variable: tag_Name
+      domain_name: ocp3.example.com
+      dns_forwarders: [8.8.8.8, 8.8.4.4]
+      external_network: publica
+      image: template-rhel7.3
+      ssh_user: cloud-user
+      ssh_key_name: AnsibleTower
+      # NOTE: YOU MUST CHANGE THIS!
+      # Can be generated with:
+      #     ddns-confgen -r /dev/urandom
+      # or:
+      #     rndc-confgen -a -c update.key -k update-key -r /dev/urandom
+      update_key: "VXQsVJgDtEj1CFPjnt/OK3ilgJyAzT6OeY9CDoqa0/Q="
+
     state: present
     tower_config_file: "~/.tower_cli.cfg"
 
@@ -170,109 +212,123 @@
   shell: curl -s -k -u {{ TOWER_USER }}:{{ TOWER_PASSWORD }} https://{{ TOWER_HOSTNAME }}/api/v1/inventory_sources/ | python -m json.tool | grep -m 1 id |awk -F":" '{print $2}' |awk -F"," '{print $1}' |sed 's/^[ \t]*//;s/[ \t]*$//'
   register: myoutput
 
-- name: Create aws-infrastructure job template
+- name: Create osp-dns job template
   become: true
   tower_job_template:
-    name: aws-infrastructure
+    name: osp-dns
     job_type: run
-    inventory: aws-inventory
+    inventory: osp-inventory
     project: openshift-ansible-contrib
-    playbook: "reference-architecture/aws-ansible/playbooks/infrastructure.yaml"
-    machine_credential: aws-privkey
-    cloud_credential: ec2
+    playbook: "reference-architecture/osp-dns/deploy-dns.yaml/infrastructure.yaml"
+    machine_credential: osp-privkey
+    cloud_credential: openstack
     state: present
     tower_config_file: "~/.tower_cli.cfg"
 
-- name: Create openshift_create_httpd_file job template
-  tower_job_template:
-    name: create_httpd_file
-    job_type: run
-    inventory: aws-inventory
-    project: openshift-ansible-contrib
-    playbook: "reference-architecture/ansible-tower-integration/create_httpd_file/create_httpd_file.yaml"
-    machine_credential: aws-privkey
-    cloud_credential: ec2
-    state: present
-    tower_config_file: "~/.tower_cli.cfg"
-
-- name: Create redhat-access-insights client job template
-  tower_job_template:
-    name: redhat-access-insights-client
-    job_type: run
-    inventory: aws-inventory
-    become_enabled: yes
-    project: ansible-redhat-access-insights-client
-    playbook: "redhat-access-insights-client.yaml"
-    machine_credential: aws-privkey
-    cloud_credential: ec2
-    state: present
-    tower_config_file: "~/.tower_cli.cfg"
-
-- name: Create aws-openshift-install job template
-  tower_job_template:
-    name: aws-openshift-install
-    job_type: run
-    inventory: aws-inventory
-    become_enabled: yes
-    project: openshift-ansible-contrib
-    playbook: "reference-architecture/aws-ansible/playbooks/openshift-install.yaml"
-    machine_credential: aws-privkey
-    cloud_credential: ec2
-    state: present
-    tower_config_file: "~/.tower_cli.cfg"
-
-- name: Create aws-openshift-cfme-install job template
-  tower_job_template:
-    name: aws-openshift-cfme-install
-    job_type: run
-    inventory: aws-inventory
-    become_enabled: no
-    project: cfme-ansible
-    playbook: "cfme_ose_install.yaml"
-    machine_credential: aws-privkey
-    cloud_credential: ec2
-    state: present
-    tower_config_file: "~/.tower_cli.cfg"
-
-- name: Create aws-openshift-cfme-ocp-provider job template
-  tower_job_template:
-    name: aws-openshift-cfme-ocp-provider
-    job_type: run
-    inventory: aws-inventory
-    become_enabled: no
-    project: cfme-ansible
-    playbook: "cfme_ose_aws_provision.yaml"
-    machine_credential: aws-privkey
-    cloud_credential: ec2
-    state: present
-    tower_config_file: "~/.tower_cli.cfg"
-
-- name: Create workflow-ocp-aws-install
-  command: tower-cli workflow create --name="workflow-ocp-aws-install" --organization="Default" --description="A workflow for deploying OCP on AWS" -e @workflow-ocp-aws-install-extravars.yaml
-
-- name: Replace inventory source
-  lineinfile:
-    path: schema.yml
-    regexp: 'REPLACEME'
-    line: 'aws (aws-inventory - {{ myoutput.stdout }})'
-
-- name: Replace inventory source second time
-  lineinfile:
-    path: schema.yml
-    regexp: 'ONEMORETIME'
-    line: 'aws (aws-inventory - {{ myoutput.stdout }})'
-
-- name: Create a schema for workflow-ocp-aws-install
-  command: tower-cli workflow schema workflow-ocp-aws-install @schema.yml
-
-- name: Reset schema file in case we run again, again
-  lineinfile:
-    path: schema.yml
-    regexp: '^(.*)inventory_source'
-    line: '            - inventory_source: ONEMORETIME'
-
-- name: Reset schema file in case we run again
-  lineinfile:
-    path: schema.yml
-    regexp: '^(.*)inventory_source.*(?<!\ONEMORETIME)$'
-    line: '  - inventory_source: REPLACEME'
+#- name: Create osp-infrastructure job template
+#  become: true
+#  tower_job_template:
+#    name: osp-infrastructure
+#    job_type: run
+#    inventory: osp-inventory
+#    project: openshift-ansible-contrib
+#    playbook: "reference-architecture/aws-ansible/playbooks/infrastructure.yaml"
+#    machine_credential: osp-privkey
+#    cloud_credential: openstack
+#    state: present
+#    tower_config_file: "~/.tower_cli.cfg"
+#
+#- name: Create openshift_create_httpd_file job template
+#  tower_job_template:
+#    name: create_httpd_file
+#    job_type: run
+#    inventory: osp-inventory
+#    project: openshift-ansible-contrib
+#    playbook: "reference-architecture/ansible-tower-integration/create_httpd_file/create_httpd_file.yaml"
+#    machine_credential: osp-privkey
+#    cloud_credential: openstack
+#    state: present
+#    tower_config_file: "~/.tower_cli.cfg"
+#
+#- name: Create redhat-access-insights client job template
+#  tower_job_template:
+#    name: redhat-access-insights-client
+#    job_type: run
+#    inventory: osp-inventory
+#    become_enabled: yes
+#    project: ansible-redhat-access-insights-client
+#    playbook: "redhat-access-insights-client.yaml"
+#    machine_credential: osp-privkey
+#    cloud_credential: openstack
+#    state: present
+#    tower_config_file: "~/.tower_cli.cfg"
+#
+## TODO: create osp-ansible to install on OpenStack
+##- name: Create osp-openshift-install job template
+##  tower_job_template:
+##    name: osp-openshift-install
+##    job_type: run
+##    inventory: osp-inventory
+##    become_enabled: yes
+##    project: openshift-ansible-contrib
+##    playbook: "reference-architecture/aws-ansible/playbooks/openshift-install.yaml"
+##    machine_credential: osp-privkey
+##    cloud_credential: openstack
+##    state: present
+##    tower_config_file: "~/.tower_cli.cfg"
+#
+#- name: Create osp-openshift-cfme-install job template
+#  tower_job_template:
+#    name: osp-openshift-cfme-install
+#    job_type: run
+#    inventory: osp-inventory
+#    become_enabled: no
+#    project: cfme-ansible
+#    playbook: "cfme_ose_install.yaml"
+#    machine_credential: osp-privkey
+#    cloud_credential: openstack
+#    state: present
+#    tower_config_file: "~/.tower_cli.cfg"
+#
+#- name: Create osp-openshift-cfme-ocp-provider job template
+#  tower_job_template:
+#    name: osp-openshift-cfme-ocp-provider
+#    job_type: run
+#    inventory: osp-inventory
+#    become_enabled: no
+#    project: cfme-ansible
+#    playbook: "cfme_ose_osp_provision.yaml"
+#    machine_credential: osp-privkey
+#    cloud_credential: openstack
+#    state: present
+#    tower_config_file: "~/.tower_cli.cfg"
+#
+#- name: Create workflow-ocp-osp-install
+#  command: tower-cli workflow create --name="workflow-ocp-osp-install" --organization="Default" --description="A workflow for deploying OCP on OSP" -e @workflow-ocp-osp-install-extravars.yaml
+#
+#- name: Replace inventory source
+#  lineinfile:
+#    path: schema.yml
+#    regexp: 'REPLACEME'
+#    line: 'osp (osp-inventory - {{ myoutput.stdout }})'
+#
+#- name: Replace inventory source second time
+#  lineinfile:
+#    path: schema.yml
+#    regexp: 'ONEMORETIME'
+#    line: 'osp (osp-inventory - {{ myoutput.stdout }})'
+#
+#- name: Create a schema for workflow-ocp-osp-install
+#  command: tower-cli workflow schema workflow-ocp-osp-install @schema.yml
+#
+#- name: Reset schema file in case we run again, again
+#  lineinfile:
+#    path: schema.yml
+#    regexp: '^(.*)inventory_source'
+#    line: '            - inventory_source: ONEMORETIME'
+#
+#- name: Reset schema file in case we run again
+#  lineinfile:
+#    path: schema.yml
+#    regexp: '^(.*)inventory_source.*(?<!\ONEMORETIME)$'
+#    line: '  - inventory_source: REPLACEME'
