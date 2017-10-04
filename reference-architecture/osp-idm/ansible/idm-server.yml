@@ -7,8 +7,11 @@
   vars:
     ipa_packages:
       - ipa-server
+      - ipa-server-dns
       - bind
       - bind-dyndb-ldap
+      - deltarpm
+    idm_forwarders: 8.8.8.8
   tasks:
 
     # On RHEL7 this is python-dns.  On F25 it's python2-dns
@@ -25,19 +28,21 @@
       when: (ansible_distribution == "RHEL" or ansible_distribution == "CentOS")
 
     - name: Hard set the hostname
-      hostname: name={{ ansible_fqdn }}
+      hostname: name={{ ansible_fqdn }}.{{ domain_name }}
 
     - name: Add host entry
       lineinfile:
         dest=/etc/hosts
-        regexp=" {{ ansible_hostname }} "
-        line="{{ ansible_eth0.ipv4.address }} {{ ansible_fqdn }}"
+        regexp=" {{ ansible_fqdn }}.{{ domain_name }} "
+        line="{{ ansible_eth0.ipv4.address }} {{ ansible_fqdn }}.{{ domain_name}}"
         owner=root
         group=root
         mode=0644
 
     - name: Ensure software is installed
-      yum: name={{ item }} state=present
+      yum:
+        name: "{{ item }}"
+        state: present
       with_items: "{{ ipa_packages }}"
 
     - name: Run the installer
@@ -47,25 +52,27 @@
         --domain {{ domain_name }}
         -a {{ idm_admin_password }}
         -p {{ idm_admin_password }}
-        --hostname={{ ansible_fqdn }}
+        --hostname={{ ansible_fqdn }}.{{ domain_name }}
         --ip-address={{ ansible_eth0.ipv4.address }}
+        --forwarder={{ idm_forwarders }}
+        --allow-zone-overlap
         --setup-dns
         creates=/etc/ipa/default.conf
 
-    - name: Enable the individual rulesets for CentOS
-      firewalld:
-        service: "{{ item }}"
-        permanent: true
-        state: enabled
-        immediate: true
-      with_items:
-        - https
-        - ldaps
-        - kerberos
-        - kpasswd
-        - dns
-        - ntp
-      when: ansible_distribution != "Fedora" and ansible_os_family == "RedHat"
+#    - name: Enable the individual rulesets for CentOS
+#      firewalld:
+#        service: "{{ item }}"
+#        permanent: true
+#        state: enabled
+#        immediate: true
+#      with_items:
+#        - https
+#        - ldaps
+#        - kerberos
+#        - kpasswd
+#        - dns
+#        - ntp
+#      when: ansible_distribution != "Fedora" and ansible_os_family == "RedHat"
 
   handlers:
     - name: reload firewalld
