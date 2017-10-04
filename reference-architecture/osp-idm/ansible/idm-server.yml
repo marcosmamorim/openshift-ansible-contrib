@@ -1,6 +1,6 @@
 ---
 # Create a bind master
-- hosts: idm
+- hosts: all
   become: true
   vars:
     ipaserver_packages:
