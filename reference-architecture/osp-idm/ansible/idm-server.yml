@@ -18,7 +18,7 @@
       redhat_subscription:
         username: "{{ rhn_username }}"
         password: "{{ rhn_password }}"
-        pool_ids: ["{{ rhn_pool }}"]
+        pool: ["{{ rhn_pool }}"]
         force_register: true
 
     # On RHEL7 this is python-dns.  On F25 it's python2-dns
