@@ -1,0 +1,70 @@
+---
+# Create a bind master
+- hosts: idm
+  become: true
+  vars:
+    ipaserver_packages:
+      - ipa-server
+      - bind
+      - bind-dyndb-ldap
+  tasks:
+
+    # On RHEL7 this is python-dns.  On F25 it's python2-dns
+    - name: install python DNS package
+      package:
+        name: python2-dns
+        state: installed
+      when: (ansible_distribution == "Fedora")
+
+    - name: install python DNS package
+      package:
+        name: python-dns
+        state: installed
+      when: (ansible_distribution == "RHEL" or ansible_distribution == "CentOS")
+
+    - name: Hard set the hostname
+      hostname: name={{ ansible_fqdn }}
+
+    - name: Add host entry
+      lineinfile:
+        dest=/etc/hosts
+        regexp=" {{ ansible_hostname }} "
+        line="{{ ansible_eth0.ipv4.address }} {{ ansible_fqdn }}"
+        owner=root
+        group=root
+        mode=0644
+
+    - name: Ensure software is installed
+      yum: name={{ item }} state=present
+      with_items: ipa_packages
+
+    - name: Run the installer
+      action: command
+        ipa-server-install -U
+        --realm {{ domain_name|upper }}
+        --domain {{ domain_name }}
+        -a {{ idm_admin_password }}
+        -p {{ idm_admin_password }}
+        --hostname={{ ansible_fqdn }}
+        --ip-address={{ ansible_eth0.ipv4.address }}
+        --setup-dns
+        creates=/etc/ipa/default.conf
+
+    - name: Enable the individual rulesets for CentOS
+      firewalld:
+        service: "{{ item }}"
+        permanent: true
+        state: enabled
+        immediate: true
+      with_items:
+        - https
+        - ldaps
+        - kerberos
+        - kpasswd
+        - dns
+        - ntp
+      when: ansible_distribution != "Fedora" and ansible_os_family == "RedHat"
+
+  handlers:
+    - name: reload firewalld
+      command: firewall-cmd --reload
