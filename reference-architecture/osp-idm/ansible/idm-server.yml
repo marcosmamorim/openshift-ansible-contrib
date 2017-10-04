@@ -1,4 +1,6 @@
 ---
+#TODO: using subscription-manager to register before install packages
+
 # Create a bind master
 - hosts: all
   become: true
@@ -36,7 +38,7 @@
 
     - name: Ensure software is installed
       yum: name={{ item }} state=present
-      with_items: ipa_packages
+      with_items: "{{ ipa_packages }}"
 
     - name: Run the installer
       action: command
