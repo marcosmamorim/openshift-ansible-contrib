@@ -14,6 +14,13 @@
     idm_forwarders: 8.8.8.8
   tasks:
 
+    - name: Subscribe to RHN and attach a pool
+      redhat_subscription:
+        username: "{{ rhn_username }}"
+        password: "{{ rhn_password }}"
+        pool_ids: ["{{ rhn_pool }}"]
+        force_register: true
+
     # On RHEL7 this is python-dns.  On F25 it's python2-dns
     - name: install python DNS package
       package:
@@ -28,13 +35,13 @@
       when: (ansible_distribution == "RHEL" or ansible_distribution == "CentOS")
 
     - name: Hard set the hostname
-      hostname: name={{ ansible_fqdn }}.{{ domain_name }}
+      hostname: name={{ idm_hostname }}.{{ domain_name }}
 
     - name: Add host entry
       lineinfile:
         dest=/etc/hosts
-        regexp=" {{ ansible_fqdn }}.{{ domain_name }} "
-        line="{{ ansible_eth0.ipv4.address }} {{ ansible_fqdn }}.{{ domain_name}}"
+        regexp=" {{ idm_hostname }}.{{ domain_name }} "
+        line="{{ ansible_eth0.ipv4.address }} {{ idm_hostname }}.{{ domain_name}}"
         owner=root
         group=root
         mode=0644
@@ -52,7 +59,7 @@
         --domain {{ domain_name }}
         -a {{ idm_admin_password }}
         -p {{ idm_admin_password }}
-        --hostname={{ ansible_fqdn }}.{{ domain_name }}
+        --hostname={{ idm_hostname }}.{{ domain_name }}
         --ip-address={{ ansible_eth0.ipv4.address }}
         --forwarder={{ idm_forwarders }}
         --allow-zone-overlap
@@ -73,7 +80,6 @@
 #        - dns
 #        - ntp
 #      when: ansible_distribution != "Fedora" and ansible_os_family == "RedHat"
-
-  handlers:
-    - name: reload firewalld
-      command: firewall-cmd --reload
+#  handlers:
+#    - name: reload firewalld
+#      command: firewall-cmd --reload
