@@ -14,12 +14,13 @@
     idm_forwarders: 8.8.8.8
   tasks:
 
-    - name: Subscribe to RHN and attach a pool
-      redhat_subscription:
-        username: "{{ rhn_username }}"
-        password: "{{ rhn_password }}"
-        pool: ["{{ rhn_pool }}"]
-        force_register: true
+#    - name: Subscribe to RHN and attach a pool
+#      redhat_subscription:
+#        username: "{{ rhn_username }}"
+#        password: "{{ rhn_password }}"
+#        pool: ["{{ rhn_pool }}"]
+#        force_register: true
+#      when: ansible_distribution != "Fedora" and ansible_os_family == "RedHat"
 
     # On RHEL7 this is python-dns.  On F25 it's python2-dns
     - name: install python DNS package
