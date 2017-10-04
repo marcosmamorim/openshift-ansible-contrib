@@ -169,7 +169,7 @@
     host: "{{ OS_AUTH_URL }}"
     tower_config_file: "~/.tower_cli.cfg"
 
-- name: Add tower inventory
+- name: Add OCP tower inventory
   tower_inventory:
     name: "osp-inventory"
     description: "Tower inventory for OSP"
@@ -177,7 +177,15 @@
     state: present
     tower_config_file: "~/.tower_cli.cfg"
 
-- name: Add tower group
+- name: Add IDM tower inventory
+  tower_inventory:
+    name: "idm-inventory"
+    description: "Tower inventory for IDM"
+    organization: "Default"
+    state: present
+    tower_config_file: "~/.tower_cli.cfg"
+
+- name: Add OSP Tower group
   tower_group:
     name: osp
     description: "Tower Group for OSP"
@@ -185,25 +193,31 @@
     credential: openstack
     inventory: "osp-inventory"
     source_vars:
-#      regions: all
-#      regions_exclude: us-gov-west-1,cn-north-1
-#      vpc_destination_variable: private_ip_address
-#      route53: True
-#      rds: False
-#      elasticache: False
-#      hostname_variable: tag_Name
-      domain_name: ocp3.example.com
-      dns_forwarders: [8.8.8.8, 8.8.4.4]
-      external_network: publica
-      image: template-rhel7.3
-      ssh_user: cloud-user
-      ssh_key_name: AnsibleTower
-      # NOTE: YOU MUST CHANGE THIS!
-      # Can be generated with:
-      #     ddns-confgen -r /dev/urandom
-      # or:
-      #     rndc-confgen -a -c update.key -k update-key -r /dev/urandom
-      update_key: "VXQsVJgDtEj1CFPjnt/OK3ilgJyAzT6OeY9CDoqa0/Q="
+      domain_name: example.com
+      idm_hostname: idm-master
+      idm_forwarders: 8.8.8.8
+      ansible_user: cloud-user
+      idm_admin_password: redhat@123
+
+- name: Add IDM Tower group
+  tower_group:
+    name: idm
+    description: "Tower Group for IDM on OSP"
+    source: openstack
+    credential: openstack
+    inventory: "idm-inventory"
+    source_vars:
+      domain_name: example.com
+      idm_hostname: idm-master
+      idm_forwarders: 8.8.8.8
+      ansible_user: cloud-user
+      idm_admin_password: redhat@123
+      ipa_packages:
+        - ipa-server
+        - ipa-server-dns
+        - bind
+        - bind-dyndb-ldap
+        - deltarpm
 
     state: present
     tower_config_file: "~/.tower_cli.cfg"
@@ -212,14 +226,14 @@
   shell: curl -s -k -u {{ TOWER_USER }}:{{ TOWER_PASSWORD }} https://{{ TOWER_HOSTNAME }}/api/v1/inventory_sources/ | python -m json.tool | grep -m 1 id |awk -F":" '{print $2}' |awk -F"," '{print $1}' |sed 's/^[ \t]*//;s/[ \t]*$//'
   register: myoutput
 
-- name: Create osp-dns job template
+- name: Create osp-idm job template
   become: true
   tower_job_template:
-    name: osp-dns
+    name: osp-idm-install
     job_type: run
-    inventory: osp-inventory
+    inventory: idm-inventory
     project: openshift-ansible-contrib
-    playbook: "reference-architecture/osp-dns/deploy-dns.yaml/infrastructure.yaml"
+    playbook: "reference-architecture/osp-idm/ansible/idm-server.yaml"
     machine_credential: osp-privkey
     cloud_credential: openstack
     state: present
