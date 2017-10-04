@@ -2,7 +2,7 @@
 #TODO: using subscription-manager to register before install packages
 
 # Create a bind master
-- hosts: all
+- hosts: idm
   become: true
   vars:
     ipa_packages:
