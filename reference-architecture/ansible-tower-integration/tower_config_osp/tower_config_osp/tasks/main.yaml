@@ -184,6 +184,18 @@
     organization: "Default"
     state: present
     tower_config_file: "~/.tower_cli.cfg"
+    variables:
+      domain_name: example.com
+      idm_hostname: idm-master
+      idm_forwarders: 8.8.8.8
+      ansible_user: cloud-user
+      idm_admin_password: redhat@123
+      ipa_packages:
+        - ipa-server
+        - ipa-server-dns
+        - bind
+        - bind-dyndb-ldap
+        - deltarpm
 
 - name: Add OSP Tower group
   tower_group:
@@ -206,19 +218,6 @@
     source: openstack
     credential: openstack
     inventory: "idm-inventory"
-    source_vars:
-      domain_name: example.com
-      idm_hostname: idm-master
-      idm_forwarders: 8.8.8.8
-      ansible_user: cloud-user
-      idm_admin_password: redhat@123
-      ipa_packages:
-        - ipa-server
-        - ipa-server-dns
-        - bind
-        - bind-dyndb-ldap
-        - deltarpm
-
     state: present
     tower_config_file: "~/.tower_cli.cfg"
 
