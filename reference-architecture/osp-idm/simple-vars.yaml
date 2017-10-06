@@ -22,7 +22,7 @@
       debug: msg="openstack --os-url '{{ clouds.devstack.auth.auth_url }}'  --os-password '{{ clouds.devstack.auth.password }}' --os-project-name '{{ clouds.devstack.auth.project_name}}'  --os-username '{{ clouds.devstack.auth.username }}' stack show"
 
     - name: server list
-      command:  "openstack --os-auth-url '{{ clouds.devstack.auth.auth_url }}'  --os-password  '{{ clouds.devstack.auth.password }}' --os-project-name '{{ clouds.devstack.auth.project_name}}'  --os-username '{{ clouds.devstack.auth.username }}' server list"
+      command:  openstack --os-auth-url '{{ clouds.devstack.auth.auth_url }}'  --os-password  '{{ clouds.devstack.auth.password }}' --os-project-name '{{ clouds.devstack.auth.project_name}}'  --os-username '{{ clouds.devstack.auth.username }}' server list
 
     - name: test using environment variables
       command: openstack server list
