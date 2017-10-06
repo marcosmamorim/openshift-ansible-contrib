@@ -17,3 +17,15 @@
 
     - name: "Print out clouds variable"
       debug: msg="{{ clouds|default('No clouds found') }}"
+
+    - name: print out auth credentials
+      debug: msg="openstack --os-url {{ clouds.devstack.auth.auth_url }}  --os-password {{ clouds.devstack.auth.password }} --os-project-name {{ clouds.devstack.auth.project_name}}  --os-username {{ clouds.devstack.auth.username }} stack show"
+
+#"devstack": {
+#            "auth": {
+#                "username": "mamorim@redhat.com",
+#                "password": "KkX-vXJ-kmg-7ZC",
+#                "project_name": "P&D-OpenShift",
+#                "auth_url": "https://keystone.openstack.dualtec.com.br:5000/v2.0"
+#            }
+#        }
