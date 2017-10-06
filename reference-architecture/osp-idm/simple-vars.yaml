@@ -1,0 +1,19 @@
+---
+- hosts: all
+  gather_facts: false
+  vars:
+    config_file: "{{ lookup('env', 'OS_CLIENT_CONFIG_FILE') }}"
+  tasks:
+    - name: debug config_file
+      debug: msg="{{ config_file }}"
+
+    - name: check if config_file exists
+      stat: path="{{ config_file }}"
+      register: st
+
+    - name: include config_file if exists
+      include_vars: "{{ config_file }}"
+      when: st.stat.exists and st.stat.isreg
+
+    - name: "Print out clouds variable"
+      debug: msg="{{ clouds|default('No clouds found') }}"
