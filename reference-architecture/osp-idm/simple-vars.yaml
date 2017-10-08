@@ -15,22 +15,25 @@
       include_vars: "{{ config_file }}"
       when: st.stat.exists and st.stat.isreg
 
+    - name: cat config_file
+      command: cat "{{ config_file }}"
+
     - name: "Print out clouds variable"
       debug: msg="{{ clouds|default('No clouds found') }}"
 
     - name: print out auth credentials
-      debug: msg="openstack --os-auth-url '{{ clouds.devstack.auth.auth_url }}'  --os-password '{{ clouds.devstack.auth.password }}' --os-project-name '{{ clouds.devstack.auth.project_name}}'  --os-username '{{ clouds.devstack.auth.username }}' stack show"
+      debug: msg="openstack --os-auth-url '{{ clouds.devstack.auth.auth_url }}'  --os-password '{{ clouds.devstack.auth.password }}' --os-project-name '{{ clouds.devstack.auth.project_name}}'  --os-username '{{ clouds.devstack.auth.username }}' server list"
 
     - name: server list
       command:  openstack --os-auth-url '{{ clouds.devstack.auth.auth_url }}'  --os-password  '{{ clouds.devstack.auth.password }}' --os-project-name '{{ clouds.devstack.auth.project_name}}'  --os-username '{{ clouds.devstack.auth.username }}' server list
 
-    - name: test using environment variables
-      action: command
-        openstack --os-auth-url '{{ clouds.devstack.auth.auth_url }}'
-        --os-password  '{{ clouds.devstack.auth.password }}'
-        --os-project-name '{{ clouds.devstack.auth.project_name}}'
-        --os-username '{{ clouds.devstack.auth.username }}'
-        server list
+#    - name: test using environment variables
+#      action: command
+#        openstack --os-auth-url '{{ clouds.devstack.auth.auth_url }}'
+#        --os-password  '{{ clouds.devstack.auth.password }}'
+#        --os-project-name '{{ clouds.devstack.auth.project_name}}'
+#        --os-username '{{ clouds.devstack.auth.username }}'
+#        server list
 
 
 
