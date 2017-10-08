@@ -9,94 +9,95 @@
     domain_name: example.com
     flavor: small.1GB
     contact: admin@{{ domain_name }}
+    config_file: "{{ lookup('env', 'OS_CLIENT_CONFIG_FILE') }}"
+
   tasks:
+    - name: check config file
+      stat: path="{{ config_file }}"
+      register: st
 
-  - name: Check whether the stack exists already
-    command: "openstack stack show {{ stack_name }}"
-    ignore_errors: yes
-    register: stack_check
+    # if the config_file does not exist, we need the external variable to connect to OpenStack
+    - name: include config file from openstack when using tower
+      include_vars: "{{ config_file }}"
+      when: st.stat.exists and st.stat.isreg
 
-  - name: Create the Heat Stack
-    os_stack:
-      name: "{{ stack_name }}"
-      template: heat/idm_service.yaml
-      parameters:
-        domain_name: "{{ domain_name }}"
-        external_network: "{{ external_network }}"
-        ssh_key_name: "{{ ssh_key_name }}"
-        dns_forwarders: "{{ dns_forwarders }}"
-        image: "{{ image }}"
-        flavor: "{{ idm_flavor }}"
-    register: stack_output
-    when: stack_check.rc != 0
+    - name: Check whether the stack exists already
+      command: "openstack stack show {{ stack_name }}"
+      environment:
+        OS_AUTH_URL: "{{ clouds.devstack.auth.auth_url }}"
+        OS_PASSWORD: "{{ clouds.devstack.auth.password }}"
+        OS_PROJECT_NAME: "{{ clouds.devstack.auth.project_name}}"
+        OS_USERNAME: "{{ clouds.devstack.auth.username }}"
+      register: stack_check
 
-  - name: Register stack output
-    command: >
-      openstack stack output show -f value -c output_value
-      {{ stack_name }} ip_address
-    register: stack_output_raw
-
-  - set_fact:
-      stack_output: "{{ stack_output_raw.stdout|from_json }}"
-
-  - name: Add the idm to the inventory
-    add_host:
-      name: "{{ stack_output.master.address }}"
-      groups: idm
-      zone: "{{ domain_name }}"
-      domain_name: "{{ domain_name }}"
-      masters: [" {{ stack_output.master.name }} "]
-      forwarders: "{{ dns_forwarders }}"
-      contact: "{{ contact }}"
-      nameservers: "{{ [stack_output.master] + stack_output.slaves }}"
-      ansible_user: "{{ ssh_user }}"
-
-  - name: Wait for the deployed servers
-    wait_for:
-      host: "{{ item }}"
-      port: 22
-    with_items: "{{ groups['all'] }}"
-
-  # NOTE(shadower): This is necessary until we switch to Ansible 2.3,
-  # which has the `wait_for_connection` module for this exact purpose.
-  # https://docs.ansible.com/ansible/wait_for_connection_module.html
-  - name: Verify the servers can be SSHd into
-    command: >
-      {{ansible_ssh_executable}} {{ansible_ssh_common_args}}
-      {% if ansible_ssh_private_key_file|default(None) %}
-          -i {{ ansible_ssh_private_key_file }}
-      {% endif %}
-      -oBatchMode=yes
-      -o 'StrictHostKeyChecking no' -o 'UserKnownHostsFile /dev/null'
-      -p {{ansible_port|default(22)}} {{ssh_user}}@{{ item }} /bin/true
-    register: result
-    retries: 10
-    delay: 1
-    until: result.rc == 0
-    with_items: "{{ groups['all'] }}"
-
-- hosts: all
-  become: true
-  tasks:
-
-  - name: Subscribe to RHN and auto-attach
-    redhat_subscription:
-      username: "{{ rhn_username }}"
-      password: "{{ rhn_password }}"
-      autosubscribe: true
-      server_hostname: "{{ sat6_hostname|default(None) }}"
-      org_id: "{{ sat6_organization|default(None) }}"
-      activationkey: "{{ sat6_activationkey|default(None) }}"
-    when: rhn_username|default and rhn_password|default and rhn_pool|default == ""
-
-  - name: Subscribe to RHN and attach a pool
-    redhat_subscription:
-      username: "{{ rhn_username }}"
-      password: "{{ rhn_password }}"
-      pool_ids: ["{{ rhn_pool }}"]
-      server_hostname: "{{ sat6_hostname|default(None) }}"
-      org_id: "{{ sat6_organization|default(None) }}"
-      activationkey: "{{ sat6_activationkey|default(None) }}"
-    when: rhn_username|default and rhn_password|default and rhn_pool|default
-
-- include: ansible/idm-server.yml
+#    - name: Create the Heat Stack
+#      os_stack:
+#        name: "idm-services"
+#        template: heat/idm_service.yaml
+#        parameters:
+#          domain_name: "{{ domain_name }}"
+#          external_network: "{{ external_network }}"
+#          ssh_key_name: "{{ ssh_key_name }}"
+#          dns_forwarders: "{{ idm_forwarders }}"
+#          image: "{{ image }}"
+#          flavor: "{{ idm_flavor }}"
+#      register: stack_output
+#      when: stack_check.rc != 0
+#
+#    - name: Register stack output
+#      command: >
+#        openstack stack output show -f value -c output_value
+#        {{ stack_name }} ip_address
+#      register: stack_output_raw
+#
+#    - set_fact:
+#        stack_output: "{{ stack_output_raw.stdout|from_json }}"
+#
+#    - name: Add the idm to the inventory
+#      add_host:
+#        name: "{{ stack_output.master.address }}"
+#        groups: idm
+#        zone: "{{ domain_name }}"
+#        domain_name: "{{ domain_name }}"
+#        masters: [" {{ stack_output.master.name }} "]
+#        forwarders: "{{ dns_forwarders }}"
+#        contact: "{{ contact }}"
+#        nameservers: "{{ [stack_output.master] + stack_output.slaves }}"
+#        ansible_user: "{{ ssh_user }}"
+#
+#    - name: Wait for the deployed servers
+#      wait_for:
+#        host: "{{ item }}"
+#        port: 22
+#      with_items: "{{ groups['all'] }}"
+#
+#    # TODO: use example from launch_instances.yml used on AWS
+#    - name: Verify the servers can be SSHd into
+#      wait_for_connection:
+#      with_items: "{{ groups['all'] }}"
+#
+#  - hosts: all
+#    become: true
+#    tasks:
+#
+#    - name: Subscribe to RHN and auto-attach
+#      redhat_subscription:
+#        username: "{{ rhn_username }}"
+#        password: "{{ rhn_password }}"
+#        autosubscribe: true
+#        server_hostname: "{{ sat6_hostname|default(None) }}"
+#        org_id: "{{ sat6_organization|default(None) }}"
+#        activationkey: "{{ sat6_activationkey|default(None) }}"
+#      when: rhn_username|default and rhn_password|default and rhn_pool|default == ""
+#
+#    - name: Subscribe to RHN and attach a pool
+#      redhat_subscription:
+#        username: "{{ rhn_username }}"
+#        password: "{{ rhn_password }}"
+#        pool_ids: ["{{ rhn_pool }}"]
+#        server_hostname: "{{ sat6_hostname|default(None) }}"
+#        org_id: "{{ sat6_organization|default(None) }}"
+#        activationkey: "{{ sat6_activationkey|default(None) }}"
+#      when: rhn_username|default and rhn_password|default and rhn_pool|default
+#
+#  - include: ansible/idm-server.yml
