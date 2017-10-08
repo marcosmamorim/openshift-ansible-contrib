@@ -24,10 +24,10 @@
     - name: Check whether the stack exists already
       command: "openstack stack show {{ stack_name }}"
       environment:
-        OS_AUTH_URL: "{{ clouds.devstack.auth.auth_url }}"
-        OS_PASSWORD: "{{ clouds.devstack.auth.password }}"
-        OS_PROJECT_NAME: "{{ clouds.devstack.auth.project_name}}"
-        OS_USERNAME: "{{ clouds.devstack.auth.username }}"
+        OS_AUTH_URL: "'{{ clouds.devstack.auth.auth_url }}'"
+        OS_PASSWORD: "'{{ clouds.devstack.auth.password }}'"
+        OS_PROJECT_NAME: "'{{ clouds.devstack.auth.project_name}}'"
+        OS_USERNAME: "'{{ clouds.devstack.auth.username }}'"
       register: stack_check
 
 #    - name: Create the Heat Stack
