@@ -77,6 +77,11 @@
   become: true
 
 #TODO: Create tower_cli.cfg before start the Tower configuration
+- name: create tower cli configuration file
+  template:
+    source: tower_cli.cfg.j2
+    dest: /root/.tower_cli.cfg
+    mode: 0640
 
 - name: Create tower organization
   tower_organization:
@@ -187,9 +192,14 @@
     variables:
       domain_name: example.com
       idm_hostname: idm-master
-      idm_forwarders: 8.8.8.8
+      dns_forwarders: 8.8.8.8
       ansible_user: cloud-user
       idm_admin_password: redhat@123
+      external_network: publica
+      ssh_key_name: AnsibleTower
+      ssh_user: cloud-user
+      image: template-rhel7.3
+      idm_flavor: small.1GB
       ipa_packages:
         - ipa-server
         - ipa-server-dns
@@ -204,12 +214,23 @@
     source: openstack
     credential: openstack
     inventory: "osp-inventory"
-    source_vars:
+    variables:
       domain_name: example.com
       idm_hostname: idm-master
-      idm_forwarders: 8.8.8.8
+      dns_forwarders: 8.8.8.8
       ansible_user: cloud-user
       idm_admin_password: redhat@123
+      external_network: publica
+      ssh_key_name: AnsibleTower
+      ssh_user: cloud-user
+      image: template-rhel7.3
+      idm_flavor: small.1GB
+      ipa_packages:
+        - ipa-server
+        - ipa-server-dns
+        - bind
+        - bind-dyndb-ldap
+        - deltarpm
 
 - name: Add IDM Tower group
   tower_group:
