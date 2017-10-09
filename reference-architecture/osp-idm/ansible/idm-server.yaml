@@ -11,7 +11,7 @@
       - bind
       - bind-dyndb-ldap
       - deltarpm
-    idm_forwarders: 8.8.8.8
+    dns_forwarders: 8.8.8.8
   tasks:
 
 #    - name: Subscribe to RHN and attach a pool
@@ -62,7 +62,7 @@
         -p {{ idm_admin_password }}
         --hostname={{ idm_hostname }}.{{ domain_name }}
         --ip-address={{ ansible_eth0.ipv4.address }}
-        --forwarder={{ idm_forwarders }}
+        --forwarder={{ dns_forwarders }}
         --allow-zone-overlap
         --setup-dns
         creates=/etc/ipa/default.conf
