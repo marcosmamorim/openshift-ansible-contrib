@@ -79,7 +79,7 @@
 #TODO: Create tower_cli.cfg before start the Tower configuration
 - name: create tower cli configuration file
   template:
-    source: tower_cli.cfg.j2
+    src: tower_cli.cfg.j2
     dest: /root/.tower_cli.cfg
     mode: 0640
 
