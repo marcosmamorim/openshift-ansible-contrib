@@ -21,12 +21,21 @@
     state: absent
     tower_config_file: "~/.tower_cli.cfg"
 
-- name: Remove create-httpd-file job template
+- name: Remove httpd-file job template
   tower_job_template:
     name: create_httpd_file
     job_type: run
     project: openshift-ansible-contrib
     playbook: "reference-architecture/ansible-tower-integration/create_httpd_file/create_httpd_file.yaml"
+    state: absent
+    tower_config_file: "~/.tower_cli.cfg"
+
+- name: Remove osp-idm job template
+  tower_job_template:
+    name: osp-idm-install
+    job_type: run
+    project: openshift-ansible-contrib
+    playbook: "reference-architecture/osp-idm/ansible/idm-server.yaml"
     state: absent
     tower_config_file: "~/.tower_cli.cfg"
 
@@ -47,9 +56,16 @@
     tower_config_file: "~/.tower_cli.cfg"
   ignore_errors: True
 
-- name: Remove tower inventory
+- name: Remove OSP Tower inventory
   tower_inventory:
-    name: "aws-inventory"
+    name: "osp-inventory"
+    organization: "Default"
+    state: absent
+    tower_config_file: "~/.tower_cli.cfg"
+
+- name: Remove IDM Tower inventory
+  tower_inventory:
+    name: "idm-inventory"
     organization: "Default"
     state: absent
     tower_config_file: "~/.tower_cli.cfg"
