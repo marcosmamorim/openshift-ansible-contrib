@@ -25,6 +25,10 @@
       include_vars: "{{ config_file }}"
       when: st.stat.exists and st.stat.isreg
 
+    - name: debug config file
+      command: cat "{{ config_file }}" > /tmp/auth.json
+      when: st.stat.exists and st.stat.isreg
+
     - name: Check whether the stack exists already
       command: "openstack stack show {{ stack_name }}"
       environment:
@@ -39,6 +43,8 @@
       os_stack:
         name: "idm-services"
         template: heat/idm_service.yaml
+        endpoint_type: public
+
         parameters:
           domain_name: "{{ domain_name }}"
           external_network: "{{ external_network }}"
