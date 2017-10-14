@@ -26,9 +26,8 @@
       when: st.stat.exists and st.stat.isreg
 
     - name: debug config file
-      file:
-        src: "{{ config_file }}"
-        dest: /tmp/auth.json
+      debug:
+        var: "{{ config_file }}"
       when: st.stat.exists and st.stat.isreg
 
     - name: Check whether the stack exists already
