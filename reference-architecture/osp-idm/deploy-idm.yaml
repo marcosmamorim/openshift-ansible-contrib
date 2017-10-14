@@ -27,7 +27,7 @@
 
     - name: debug config file
       debug:
-        var: "{{ config_file }}"
+        var: "{{ clouds }}"
       when: st.stat.exists and st.stat.isreg
 
     - name: Check whether the stack exists already
