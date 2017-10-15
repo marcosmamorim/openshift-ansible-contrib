@@ -29,11 +29,6 @@
       include_vars: "{{ config_file }}"
       when: st.stat.exists and st.stat.isreg
 
-    - name: debug config file
-      debug:
-        msg: "{{ clouds.devstack }}"
-      when: st.stat.exists and st.stat.isreg
-
     - name: Check whether the stack exists already
       command: >
         openstack --os-auth-url '{{ clouds.devstack.auth.auth_url }}'
@@ -78,15 +73,20 @@
         name: "{{ stack_output.master.address }}"
         groups: idm
         zone: "{{ domain_name }}"
-        domain_name: "{{ domain_name }}"
         masters: [" {{ stack_output.master.name }} "]
-        dns_forwarders: "{{ dns_forwarders }}"
         contact: "{{ contact }}"
+        rhn_username: "{{ rhn_username }}"
+        rhn_password: "{{ rhn_password }}"
+        rhn_pool: "{{ rhn_pool }}"
         nameservers: "{{ [stack_output.master] }}"
         ansible_user: "{{ ssh_user }}"
+        idm_hostname: "{{ ipa_packages|default('idm-master') }}"
+        domain_name: "{{ domain_name|default('example.com') }}"
+        idm_admin_password: "{{ idm_admin_password|default('redhat@123') }}"
+        dns_forwarders: "{{ dns_forwarders|default('8.8.8.8') }}"
 
     # TODO: develop a best way to wait to server be reachable
-    - name: Wait for 30 seconds to system to become reachable
+    - name: Wait for 30 seconds to system become reachable
       wait_for:
         host: "{{ item }}"
         port: 22
@@ -95,12 +95,8 @@
 
 - hosts: all
   become: true
-  vars:
-    rhn_username: 'mamorim1@redhat.com'
-    rhn_pool: 8a85f9874011071c01407da00b997cb2
   tasks:
-
-
+    # TODO: Replace to module redhat_subscription
     - name: check if already registred to RHN
       command: >
         subscription-manager identity
