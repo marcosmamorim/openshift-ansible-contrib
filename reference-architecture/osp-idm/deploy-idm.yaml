@@ -7,17 +7,21 @@
   vars:
     stack_name: idm-service
     domain_name: example.com
-    flavor: small.1GB
+    flavor: m1.small
     contact: admin@{{ domain_name }}
     external_network: public
-    dns_forwarders: 8.8.8.8
+    dns_forwarders: [10.16.36.29,10.11.5.19]
+    image: rhel73
+    ssh_key_name: AnsibleTower
     config_file: "{{ lookup('env', 'OS_CLIENT_CONFIG_FILE') }}"
-    image: rhel7
-
+    ssh_user: cloud-user
+    rhn_username: mamorim1@redhat.com
+    rhn_pool: 8a85f9874011071c01407da00b997cb2
+    rhn_password: Sophia@2005!
 
   tasks:
     - name: check config file
-      stat: path="{{ config_file }}"
+      stat: path={{ config_file }}
       register: st
 
     # if the config_file does not exist, we need the external variable to connect to OpenStack
@@ -27,23 +31,25 @@
 
     - name: debug config file
       debug:
-        var: "{{ clouds }}"
+        msg: "{{ clouds.devstack }}"
       when: st.stat.exists and st.stat.isreg
 
     - name: Check whether the stack exists already
-      command: "openstack stack show {{ stack_name }}"
-      environment:
-        OS_AUTH_URL: "'{{ clouds.devstack.auth.auth_url }}'"
-        OS_PASSWORD: "'{{ clouds.devstack.auth.password }}'"
-        OS_PROJECT_NAME: "'{{ clouds.devstack.auth.project_name}}'"
-        OS_USERNAME: "'{{ clouds.devstack.auth.username }}'"
+      command: >
+        openstack --os-auth-url '{{ clouds.devstack.auth.auth_url }}'
+        --os-password '{{ clouds.devstack.auth.password }}'
+        --os-username '{{ clouds.devstack.auth.username }}'
+        --os-project-name '{{ clouds.devstack.auth.project_name}}'
+        stack show {{ stack_name }}
       register: stack_check
       ignore_errors: True
 
     - name: Create the Heat Stack
       os_stack:
-        name: "idm-services"
+        name: "{{ stack_name }}"
         template: heat/idm_service.yaml
+        auth_type: password
+        auth: "{{ clouds.devstack.auth }}"
         parameters:
           domain_name: "{{ domain_name }}"
           external_network: "{{ external_network }}"
@@ -51,82 +57,72 @@
           dns_forwarders: "{{ dns_forwarders }}"
           image: "{{ image }}"
           flavor: "{{ flavor }}"
-        auth:
-          auth-url: "'{{ clouds.devstack.auth.auth_url }}'"
-          password: "'{{ clouds.devstack.auth.password }}'"
-          project_name: "'{{ clouds.devstack.auth.project_name}}'"
-          username: "'{{ clouds.devstack.auth.username }}'"
-
-#          environment:
-#            - /root/keystonerc_admin
-#          OS_AUTH_URL: "'{{ clouds.devstack.auth.auth_url }}'"
-#          OS_PASSWORD: "'{{ clouds.devstack.auth.password }}'"
-#          OS_PROJECT_NAME: "'{{ clouds.devstack.auth.project_name}}'"
-#          OS_USERNAME: "'{{ clouds.devstack.auth.username }}'"
       register: stack_output
       when: stack_check.rc != 0
 
     - name: Register stack output
       command: >
-        openstack stack output show -f value -c output_value
+        openstack --os-auth-url '{{ clouds.devstack.auth.auth_url }}'
+        --os-password '{{ clouds.devstack.auth.password }}'
+        --os-username '{{ clouds.devstack.auth.username }}'
+        --os-project-name '{{ clouds.devstack.auth.project_name}}'
+        stack output show -f value -c output_value
         {{ stack_name }} ip_address
-      environment:
-        OS_AUTH_URL: "'{{ clouds.devstack.auth.auth_url }}'"
-        OS_PASSWORD: "'{{ clouds.devstack.auth.password }}'"
-        OS_PROJECT_NAME: "'{{ clouds.devstack.auth.project_name}}'"
-        OS_USERNAME: "'{{ clouds.devstack.auth.username }}'"
       register: stack_output_raw
 
     - set_fact:
         stack_output: "{{ stack_output_raw.stdout|from_json }}"
 
-    - debug: var="{{stack_output}}"
-#
-#    - name: Add the idm to the inventory
-#      add_host:
-#        name: "{{ stack_output.master.address }}"
-#        groups: idm
-#        zone: "{{ domain_name }}"
-#        domain_name: "{{ domain_name }}"
-#        masters: [" {{ stack_output.master.name }} "]
-#        forwarders: "{{ dns_forwarders }}"
-#        contact: "{{ contact }}"
-#        nameservers: "{{ [stack_output.master] + stack_output.slaves }}"
-#        ansible_user: "{{ ssh_user }}"
-#
-#    - name: Wait for the deployed servers
-#      wait_for:
-#        host: "{{ item }}"
-#        port: 22
-#      with_items: "{{ groups['all'] }}"
-#
-#    # TODO: use example from launch_instances.yml used on AWS
-#    - name: Verify the servers can be SSHd into
-#      wait_for_connection:
-#      with_items: "{{ groups['all'] }}"
-#
-#  - hosts: all
-#    become: true
-#    tasks:
-#
-#    - name: Subscribe to RHN and auto-attach
-#      redhat_subscription:
-#        username: "{{ rhn_username }}"
-#        password: "{{ rhn_password }}"
-#        autosubscribe: true
-#        server_hostname: "{{ sat6_hostname|default(None) }}"
-#        org_id: "{{ sat6_organization|default(None) }}"
-#        activationkey: "{{ sat6_activationkey|default(None) }}"
-#      when: rhn_username|default and rhn_password|default and rhn_pool|default == ""
-#
-#    - name: Subscribe to RHN and attach a pool
-#      redhat_subscription:
-#        username: "{{ rhn_username }}"
-#        password: "{{ rhn_password }}"
-#        pool_ids: ["{{ rhn_pool }}"]
-#        server_hostname: "{{ sat6_hostname|default(None) }}"
-#        org_id: "{{ sat6_organization|default(None) }}"
-#        activationkey: "{{ sat6_activationkey|default(None) }}"
-#      when: rhn_username|default and rhn_password|default and rhn_pool|default
-#
-#  - include: ansible/idm-server.yml
+    - name: Add the idm to the inventory
+      add_host:
+        name: "{{ stack_output.master.address }}"
+        groups: idm
+        zone: "{{ domain_name }}"
+        domain_name: "{{ domain_name }}"
+        masters: [" {{ stack_output.master.name }} "]
+        dns_forwarders: "{{ dns_forwarders }}"
+        contact: "{{ contact }}"
+        nameservers: "{{ [stack_output.master] }}"
+        ansible_user: "{{ ssh_user }}"
+
+    # TODO: develop a best way to wait to server be reachable
+    - name: Wait for 30 seconds to system to become reachable
+      wait_for:
+        host: "{{ item }}"
+        port: 22
+        delay: 30
+      with_items: "{{ groups['all'] }}"
+
+- hosts: all
+  become: true
+  vars:
+    rhn_username: 'mamorim1@redhat.com'
+    rhn_pool: 8a85f9874011071c01407da00b997cb2
+  tasks:
+
+
+    - name: check if already registred to RHN
+      command: >
+        subscription-manager identity
+      register: registred
+      ignore_errors: true
+      when: rhn_username|default and rhn_password|default and rhn_pool|default
+
+    - name: Subscribe to RHN
+      command: >
+        subscription-manager register
+        --username {{ rhn_username }}
+        --password '{{ rhn_password }}'
+        --serverurl https://subscription.rhn.redhat.com
+        --force
+      register: register_rhn
+      when: rhn_username|default and rhn_password|default and rhn_pool|default and registred.rc != 0
+
+    - name: Attach to pool
+      command: >
+        subscription-manager attach
+        --pool {{ rhn_pool }}
+      when: registred.rc != 0
+
+- include: ansible/idm-server.yaml
+
