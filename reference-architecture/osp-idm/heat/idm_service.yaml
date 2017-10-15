@@ -32,10 +32,11 @@ parameters:
 
   image:
     description: >
-      The Glance image to use as a base for DNS servers
+      The Glance image to use as a base for IDM servers
     type: string
     constraints:
     - custom_constraint: glance.image
+      description: Must identify an image known to Glance
 
   flavor:
     description: >
@@ -76,9 +77,7 @@ resources:
       image: {get_param: image}
       flavor: {get_param: flavor}
       master_hostname: {get_param: master_hostname}
-      slave_hostname_prefix: {get_param: slave_hostname_prefix}
       domain_name: {get_param: domain_name}
-      slave_count: {get_param: slave_count}
       ssh_user: {get_param: ssh_user}
       ssh_key_name: {get_param: ssh_key_name}
 
