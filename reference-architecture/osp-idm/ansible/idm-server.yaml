@@ -1,5 +1,4 @@
 ---
-#TODO: using subscription-manager to register before install packages
 
 # Create a bind master
 - hosts: idm
@@ -11,16 +10,29 @@
       - bind
       - bind-dyndb-ldap
       - deltarpm
-    dns_forwarders: 8.8.8.8
+      - rng-tools
+    idm_hostname: idm-master
+    domain_name: example.com
+    idm_admin_password: redhat@123
+    dns_forwarders: [10.16.36.29,10.11.5.19]
+    rhn_repos:
+      - rhel-7-server-rpms
+      - rhel-7-server-rh-common-rpms
+      - rhel-7-server-extras-rpms
+      - rhel-7-server-optional-rpms
   tasks:
 
-#    - name: Subscribe to RHN and attach a pool
-#      redhat_subscription:
-#        username: "{{ rhn_username }}"
-#        password: "{{ rhn_password }}"
-#        pool: ["{{ rhn_pool }}"]
-#        force_register: true
-#      when: ansible_distribution != "Fedora" and ansible_os_family == "RedHat"
+    #TODO: enable repository
+    - name: Disable all Red Hat repositories
+      command:
+        subscription-manager repos --disable=*
+#      when: ansible_distribution == "RHEL"
+
+    - name: Enable Red Hat repositories
+      command:
+        subscription-manager repos --enable={{ item }}
+      with_items: "{{ rhn_repos }}"
+#      when: ansible_distribution == "RHEL"
 
     # On RHEL7 this is python-dns.  On F25 it's python2-dns
     - name: install python DNS package
@@ -53,6 +65,12 @@
         state: present
       with_items: "{{ ipa_packages }}"
 
+    - name: start rngd
+      service:
+        name: rngd
+        enabled: true
+        state: started
+
     - name: Run the installer
       action: command
         ipa-server-install -U
@@ -65,8 +83,10 @@
         --forwarder={{ dns_forwarders }}
         --allow-zone-overlap
         --setup-dns
+        --auto-reverse
         creates=/etc/ipa/default.conf
 
+#TODO: Disable or Create rules on FirewallD
 #    - name: Enable the individual rulesets for CentOS
 #      firewalld:
 #        service: "{{ item }}"
