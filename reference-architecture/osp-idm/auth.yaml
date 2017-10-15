@@ -1,0 +1,8 @@
+clouds:
+  devstack:
+    auth:
+      auth_url: http://OSP_KEYSTONE_ADDR:5000/v2.0
+      password: your_osp_user_password
+      project_name: your_osp_project_name
+      username: your_osp_user_name
+    auth_type: password
