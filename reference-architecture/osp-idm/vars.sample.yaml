@@ -1,16 +1,63 @@
 ---
-
-domain_name: example.com
-dns_forwarders: 8.8.8.8
-
-
+# IDM short hostname
 idm_hostname: idm-master
-ansible_user: cloud-user
+
+# IDM Admin password
 idm_admin_password: redhat@123
+
+# Stack name
+stack_name: idm-service
+
+#Domain Name used to install IDM
+domain_name: example.com
+
+# Contact email used by DNS on IDM
+contact: admin@{{ domain_name }}
+
+# DNS Forward used by IDM
+dns_forwarders: 10.16.36.29
+
+# Configuration file describe auth.yaml, if the environment variable OS_CLIENT_CONFIG_FILE ansible will use
+# or you can export this variable before run the playbook
+# eg: export OS_CLIENT_CONFIG_FILE=<path_to_file_auth.yaml>
+config_file: "{{ lookup('env', 'OS_CLIENT_CONFIG_FILE') }}"
+
+# Flavor name used to install IDM
+flavor: m1.small
+
+# External network name used to floating ip
+external_network: public
+
+# Image name
+image: rhel73
+
+# Keypair name used to connect to IDM server after install using heat
+ssh_key_name: AnsibleTower
+
+# Username to connect to virtual IDM server
+ssh_user: cloud-user
+
+# If use RHEL, setting the rhn_username to register using subscription-manager
+rhn_username: ''
+
+# If use RHEL, setting the rhn_password to register using subscription-manager
+rhn_password: ''
+
+# Red Hat Pool name or ID
+rhn_pool: ''
+
+# Repositories will be enabled during the installation
+rhn_repos:
+  - rhel-7-server-rpms
+  - rhel-7-server-rh-common-rpms
+  - rhel-7-server-extras-rpms
+  - rhel-7-server-optional-rpms
+
+# Packages will be installed during the installation
 ipa_packages:
   - ipa-server
   - ipa-server-dns
   - bind
   - bind-dyndb-ldap
   - deltarpm
-
+  - rng-tools
