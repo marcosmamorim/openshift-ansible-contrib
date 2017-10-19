@@ -1,0 +1,396 @@
+heat_template_version: 2016-10-14
+
+description: >
+  Deploy OpenShift 3 on OpenStack using heat and Ansible
+
+parameters:
+
+  # Networks to connect to or create
+  external_network:
+    type: string
+    description: >
+      The external network that provides floating IP addresses for the nodes
+    constraints:
+    - custom_constraint: neutron.network
+
+  service_subnet_cidr:
+    type: string
+    description: >
+      The subnet used for instance to instance communication
+    default: 192.168.10.0/24
+
+  container_subnet:
+    type: string
+    description: >
+      The subnet used for openshift node-node communication
+    default: 10.0.0.0/24
+
+  dns_nameservers:
+    type: comma_delimited_list
+    description: Addresses of a dns nameserver reachable in your environment
+
+  domain_name:
+    description: >
+      All VMs will be placed in this domain
+    type: string
+
+  name_prefix:
+    type: string
+    description: >
+      The prefix name for all resources to create
+    default: openshift
+
+  ssh_user:
+    type: string
+    description: >
+      The SSH user available on all nodes.
+    default: cloud-user
+
+  ssh_key_name:
+    type: string
+    description: Name of the SSH keypair registered with Nova
+    constraints:
+    - custom_constraint: nova.keypair
+
+  bastion_image:
+    description: >
+      The Glance image to use as a base for bastion server
+    type: string
+    constraints:
+    - custom_constraint: glance.image
+
+  bastion_flavor:
+    description: >
+      The name of the OpenStack instance flavor to use for Bastion server
+    type: string
+    default: m1.small
+    constraints:
+    - custom_constraint: nova.flavor
+
+  infra_count:
+    type: number
+    description: >
+      Number of non-master nodes to create.
+    default: 2
+
+  infra_image:
+    type: string
+    description: Name or ID of the host image registered with Glance
+    constraints:
+    - custom_constraint: glance.image
+
+  infra_flavor:
+    type: string
+    description: The Nova flavor to use for the OpenShift infra nodes
+    default: m1.medium
+    constraints:
+    - custom_constraint: nova.flavor
+
+  infra_docker_volume_size:
+    description: >
+      size of a cinder volume in GB to allocate to docker for container/image
+      storage
+    type: number
+    default: 25
+
+  master_count:
+    type: number
+    description: >
+      Number of non-master nodes to create.
+    default: 1
+
+  master_image:
+    type: string
+    description: Name or ID of the host image registered with Glance
+    constraints:
+    - custom_constraint: glance.image
+
+  master_flavor:
+    type: string
+    description: The Nova flavor to use for the OpenShift master nodes
+    default: m1.medium
+    constraints:
+    - custom_constraint: nova.flavor
+
+  master_docker_volume_size:
+    description: >
+      size of a cinder volume in GB to allocate to docker for container/image
+      storage
+    type: number
+    default: 25
+
+resources:
+
+################
+# Network
+  network:
+    type: network.yaml
+    properties:
+      external_network: {get_param: external_network}
+      service_subnet_cidr: {get_param: service_subnet_cidr}
+      container_subnet: {get_param: container_subnet}
+      dns_nameservers: {get_param: dns_nameservers}
+      network_name_prefix: {get_param: name_prefix}
+
+################
+# bastion server
+  ocp_bastion_host:
+    depends_on: [network]
+    type: bastion.yaml
+    properties:
+      hostname:
+        str_replace:
+          template: "{{prefix}}-bastion"
+          params:
+            "{{prefix}}": {get_param: name_prefix}
+      domain_name: {get_param: domain_name}
+      dns_nameservers: {get_param: dns_nameservers}
+      key_name: {get_param: ssh_key_name}
+      image: {get_param: bastion_image}
+      flavor: {get_param: bastion_flavor}
+      external_network: {get_param: external_network}
+      service_subnet: {get_attr: [network, service_subnet_id]}
+      service_network: {get_attr: [network, service_network_id]}
+
+################
+# Infranodes
+
+  infra_security_group:
+    description: >
+      Define network access to infra servers
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: infra-security-group
+      rules:
+      - protocol: icmp
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 80
+        port_range_max: 80
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 443
+        port_range_max: 443
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 10250
+        port_range_max: 10250
+      - direction: ingress
+        protocol: udp
+        port_range_min: 4789
+        port_range_max: 4789
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 5000
+        port_range_max: 5000
+      - protocol: 112
+
+  ocp_infra_host:
+    depends_on: [network, ocp_bastion_host, infra_security_group]
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: {get_param: infra_count}
+      resource_def:
+        type: infra.yaml
+        properties:
+          hostname:
+            str_replace:
+              template: "{{prefix}}-infra-%index%"
+              params:
+                "{{prefix}}": {get_param: name_prefix}
+          domain_name: {get_param: domain_name}
+          dns_nameservers: {get_param: dns_nameservers}
+          key_name: {get_param: ssh_key_name}
+          image: {get_param: infra_image}
+          flavor: {get_param: infra_flavor}
+          external_network: {get_param: external_network}
+          service_subnet: {get_attr: [network, service_subnet_id]}
+          service_network: {get_attr: [network, service_network_id]}
+          cluster_network: {get_attr: [network, cluster_network_id]}
+          cluster_subnet: {get_attr: [network, cluster_subnet_id]}
+          docker_volume_size: {get_param: infra_docker_volume_size}
+          bastion_keypair: {get_attr: [ocp_bastion_host, public_key]}
+          security_group: {get_resource: infra_security_group}
+
+################
+# masternodes
+
+  master_security_group:
+    description: >
+      Define network access to master servers
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: master-security-group
+      rules:
+      - protocol: icmp
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 4001
+        port_range_max: 4001
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 8443
+        port_range_max: 8443
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 53
+        port_range_max: 53
+      - direction: ingress
+        protocol: udp
+        port_range_min: 53
+        port_range_max: 53
+      - direction: ingress
+        protocol: udp
+        port_range_min: 4789
+        port_range_max: 4789
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 8053
+        port_range_max: 8053
+      - direction: ingress
+        protocol: udp
+        port_range_min: 8053
+        port_range_max: 8053
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 10250
+        port_range_max: 10250
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 24224
+        port_range_max: 24224
+      - direction: ingress
+        protocol: udp
+        port_range_min: 24224
+        port_range_max: 24224
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 2379
+        port_range_max: 2379
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 2380
+        port_range_max: 2380
+        remote_mode: remote_group_id
+
+  ocp_master_host:
+    depends_on: [network, ocp_bastion_host, master_security_group]
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: {get_param: master_count}
+      resource_def:
+        type: master.yaml
+        properties:
+          hostname:
+            str_replace:
+              template: "{{prefix}}-master-%index%"
+              params:
+                "{{prefix}}": {get_param: name_prefix}
+          domain_name: {get_param: domain_name}
+          dns_nameservers: {get_param: dns_nameservers}
+          key_name: {get_param: ssh_key_name}
+          image: {get_param: master_image}
+          flavor: {get_param: master_flavor}
+          external_network: {get_param: external_network}
+          service_subnet: {get_attr: [network, service_subnet_id]}
+          service_network: {get_attr: [network, service_network_id]}
+          cluster_network: {get_attr: [network, cluster_network_id]}
+          cluster_subnet: {get_attr: [network, cluster_subnet_id]}
+          docker_volume_size: {get_param: master_docker_volume_size}
+          bastion_keypair: {get_attr: [ocp_bastion_host, public_key]}
+          security_group: {get_resource: master_security_group}
+
+outputs:
+
+################
+# Network
+  ocp_subnets:
+    description: The networks that carries the OpenShift traffic
+    value:
+      name: { get_attr: [network, openshift_subnets]}
+
+################
+# bastion
+
+  bastion_ips:
+    description: Bastion IP addresses (floating and service)
+    value:
+      bastion_fip:
+        { get_attr: [ocp_bastion_host, bastion_floating_ip]}
+      bastion_sip:
+        { get_attr: [ocp_bastion_host, bastion_service_ip]}
+
+  bastion_keypair:
+    description: Bastion public and private key.
+    value:
+      public_key:
+        { get_attr: [ocp_bastion_host, public_key] }
+      private_key:
+        { get_attr: [ocp_bastion_host, private_key] }
+
+################
+# Infranodes
+
+  infra_ips:
+    description: The ip address for all infra nodes
+    value:
+      infra_fip:
+        { get_attr: [ocp_infra_host, infra_floating_ip]}
+      infra_sip:
+        { get_attr: [ocp_infra_host, infra_service_ip]}
+      infra_cip:
+        { get_attr: [ocp_infra_host, infra_cluster_ip]}
+
+  infra_fip:
+    value:
+      { get_attr: [ocp_infra_host, infra_floating_ip]}
+
+  infra_hostname:
+    value:
+      { get_attr: [ocp_infra_host, infra_hostname]}
+
+  infra_sip:
+    value:
+      { get_attr: [ocp_infra_host, infra_service_ip]}
+
+  infra_cip:
+    value:
+      { get_attr: [ocp_infra_host, infra_cluster_ip]}
+
+#################
+## masters
+#
+#  master_ips:
+#    description: The ip address for all master nodes
+#    value:
+#      master_fip:
+#        { get_attr: [ocp_master_host, master_floating_ip]}
+#      master_sip:
+#        { get_attr: [ocp_master_host, master_service_ip]}
+#      master_cip:
+#        { get_attr: [ocp_master_host, master_cluster_ip]}
+#
+#  master_fip:
+#    value:
+#      { get_attr: [ocp_master_host, master_floating_ip]}
+#
+#  master_hostname:
+#    value:
+#      { get_attr: [ocp_master_host, master_hostname]}
+#
+#  master_sip:
+#    value:
+#      { get_attr: [ocp_master_host, master_service_ip]}
+#
+#  master_cip:
+#    value:
+#      { get_attr: [ocp_master_host, master_cluster_ip]}
+#

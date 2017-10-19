@@ -1,0 +1,125 @@
+---
+heat_template_version: 2016-10-14
+
+description:
+  A simple network to host other services
+
+parameters:
+  # Networks to connect to or create
+  external_network:
+    type: string
+    description: >
+      The external network that provides floating IP addresses for the nodes
+    constraints:
+    - custom_constraint: neutron.network
+
+  network_name_prefix:
+    type: string
+    description: >
+      The name of the network to create
+    default: openshift
+
+  service_subnet_cidr:
+    type: string
+    description: >
+      The subnet used for instance to instance communication
+    default: 192.168.10.0/24
+
+  container_subnet:
+    type: string
+    description: >
+      The subnet used for openshift node-node communication
+    default: 10.0.0.0/24
+
+  dns_nameservers:
+    type: comma_delimited_list
+    description: Addresses of a dns nameserver reachable in your environment
+
+resources:
+
+  # Network Components
+  service_network:
+    type: OS::Neutron::Net
+    properties:
+      name:
+        str_replace:
+          template: "{{prefix}}-network"
+          params:
+            "{{prefix}}": {get_param: network_name_prefix}
+
+  service_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      cidr: {get_param: service_subnet_cidr}
+      network: {get_resource: service_network}
+      dns_nameservers: {get_param: dns_nameservers}
+      name:
+        str_replace:
+          template: "{{prefix}}-service-subnet"
+          params:
+            "{{prefix}}": {get_param: network_name_prefix}
+
+  external_router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: {get_param: external_network}
+      name:
+        str_replace:
+          template: "{{prefix}}-router"
+          params:
+            "{{prefix}}": {get_param: network_name_prefix}
+
+  external_router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: {get_resource: external_router}
+      subnet: {get_resource: service_subnet}
+
+  cluster_network:
+    type: OS::Neutron::Net
+    properties:
+      name:
+        str_replace:
+          template: "{{prefix}}-cluster"
+          params:
+            "{{prefix}}": {get_param: network_name_prefix}
+
+  cluster_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      cidr: {get_param: container_subnet}
+      network: {get_resource: cluster_network}
+      gateway_ip: ""
+      name:
+        str_replace:
+          template: "{{prefix}}-cluster-subnet"
+          params:
+            "{{prefix}}": {get_param: network_name_prefix}
+
+outputs:
+  openshift_subnets:
+    description: The networks that carries the OpenShift traffic
+    value:
+      services:
+        name: { get_attr: [service_subnet, name]}
+        value: {get_attr: [service_subnet, cidr]}
+      cluster:
+        name: { get_attr: [cluster_subnet, name]}
+        value: {get_attr: [cluster_subnet, cidr]}
+
+  service_network_id:
+    description: ID for service network
+    value: {get_attr: [service_network, name]}
+
+  service_subnet_id:
+    description: ID for service network
+    value: {get_attr: [service_subnet, name]}
+
+  cluster_network_id:
+    description: ID for cluster network
+    value: {get_attr: [cluster_network, name]}
+
+  cluster_subnet_id:
+    description: ID for cluster network
+    value: {get_attr: [cluster_subnet, name]}

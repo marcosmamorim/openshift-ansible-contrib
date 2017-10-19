@@ -1,0 +1,19 @@
+parameters:
+  external_network: public
+  dns_nameservers: 172.24.4.5
+  domain_name: example.com
+  ssh_user: cloud-user
+  ssh_key_name: AnsibleTower
+
+  bastion_image: rhel73
+  bastion_flavor: m1.tiny
+
+  infra_count: 1
+  infra_image: rhel73
+  infra_flavor: m1.tiny
+  infra_docker_volume_size: 10
+
+  master_count: 1
+  master_image: rhel73
+  master_flavor: m1.tiny
+  master_docker_volume_size: 10

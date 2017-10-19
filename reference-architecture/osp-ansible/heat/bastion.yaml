@@ -1,0 +1,186 @@
+---
+heat_template_version: 2016-10-14
+
+description:
+  An instance for a bastion server
+  The instances are created with Heat and then configured with Ansible
+
+parameters:
+
+  service_network:
+    description: >
+      The name or ID of the internal network
+    type: string
+    constraints:
+    - custom_constraint: neutron.network
+
+  service_subnet:
+    description: >
+      The name or ID of the internal IPv4 space
+    type: string
+    constraints:
+    - custom_constraint: neutron.subnet
+
+  external_network:
+    type: string
+    description: >
+      The external network that provides floating IP addresses for the nodes
+    constraints:
+    - custom_constraint: neutron.network
+
+  hostname:
+    description: >
+      The Infrastructure hostname portion of the FQDN
+    type: string
+    default: "bastion"
+    constraints:
+    - allowed_pattern: '[a-z0-9\-]*'
+      description: Hostname must contain only characters [a-z0-9\-].
+
+  domain_name:
+    description: >
+      All VMs will be placed in this domain
+    type: string
+
+  image:
+    description: >
+      The Glance image to use as a base for DNS servers
+    type: string
+    constraints:
+    - custom_constraint: glance.image
+
+  flavor:
+    description: >
+      The name of the OpenStack instance flavor to use for DNS servers
+    type: string
+    default: m1.small
+    constraints:
+    - custom_constraint: nova.flavor
+
+  key_name:
+    type: string
+    description: Name of the SSH keypair registered with Nova
+    constraints:
+    - custom_constraint: nova.keypair
+
+  dns_nameservers:
+    type: comma_delimited_list
+    description: Addresses of a dns nameserver reachable in your environment
+
+  ssh_user:
+    type: string
+    description: >
+      The SSH user available on all nodes.
+    default: cloud-user
+
+resources:
+
+  bastion_security_group:
+    description: >
+      Define network access to bastion servers ICMP and SSH allowed
+    type: OS::Neutron::SecurityGroup
+
+    properties:
+      name: bastion-security-group
+      rules:
+      - protocol: icmp
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+
+  service_port:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_param: service_network}
+      security_groups:
+        - default
+        - { get_resource: bastion_security_group }
+      fixed_ips:
+        - subnet_id: {get_param: service_subnet}
+
+  host:
+    type: OS::Nova::Server
+    properties:
+      name:
+        str_replace:
+          template: "HOST.DOMAIN"
+          params:
+            HOST: {get_param: hostname}
+            DOMAIN: {get_param: domain_name}
+      image: {get_param: image}
+      flavor: {get_param: flavor}
+      key_name: {get_param: key_name}
+      networks:
+        - port: {get_resource: service_port}
+      user_data_format: SOFTWARE_CONFIG
+      user_data: {get_resource: init}
+
+  floating_ip:
+      type: OS::Nova::FloatingIP
+      properties:
+        pool: {get_param: external_network}
+
+  association:
+      type: OS::Nova::FloatingIPAssociation
+      properties:
+        floating_ip: { get_resource: floating_ip }
+        server_id: { get_resource: host }
+
+  bastion_keypair:
+    type: OS::Nova::KeyPair
+    properties:
+      name: bastion-keypair
+      save_private_key: true
+
+  init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: {get_resource: set_hostname}
+      - config: {get_resource: included_files}
+
+  # we need to include the bastion ssh key created during the installation
+  included_files:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        ssh_authorized_keys:
+        - {get_attr: [bastion_keypair, public_key]}
+        #TODO: Fix permissions to bastion private key the user not create at this moment and
+        # we've a race condition when we trie to set permission
+        write_files:
+        - path: /tmp/id_rsa1
+          content: {get_attr: [bastion_keypair, private_key]}
+          permissions: 0600
+
+  # force to set the hostname
+  set_hostname:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        hostname: {get_param: hostname}
+        fqdn:
+          str_replace:
+            template: "HOST.DOMAIN"
+            params:
+              HOST: {get_param: hostname}
+              DOMAIN: {get_param: domain_name}
+
+outputs:
+
+  bastion_floating_ip:
+    description: Floating IP used by Bastion server
+    value: {get_attr: [floating_ip, ip]}
+
+  bastion_service_ip:
+    description: Internal IP on service network used by bastion server
+    value: {get_attr: [host, first_address]}
+
+  public_key:
+    description: The public key of the keypair.
+    value: { get_attr: [bastion_keypair, public_key] }
+
+  private_key:
+    description: The private key of the keypair.
+    value: { get_attr: [bastion_keypair, private_key] }
