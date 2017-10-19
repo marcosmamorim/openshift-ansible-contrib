@@ -119,6 +119,32 @@ parameters:
     type: number
     default: 25
 
+  node_count:
+    type: number
+    description: >
+      Number of nodes to create.
+    default: 1
+
+  node_image:
+    type: string
+    description: Name or ID of the host image registered with Glance
+    constraints:
+    - custom_constraint: glance.image
+
+  node_flavor:
+    type: string
+    description: The Nova flavor to use for the OpenShift nodes nodes
+    default: m1.medium
+    constraints:
+    - custom_constraint: nova.flavor
+
+  node_docker_volume_size:
+    description: >
+      size of a cinder volume in GB to allocate to docker for container/image
+      storage
+    type: number
+    default: 25
+
 resources:
 
 ################
@@ -308,6 +334,55 @@ resources:
           bastion_keypair: {get_attr: [ocp_bastion_host, public_key]}
           security_group: {get_resource: master_security_group}
 
+################
+# nodes
+
+  # Define the network access policy for openshift nodes
+  node_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+      - protocol: icmp
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 10250
+        port_range_max: 10250
+      - direction: ingress
+        protocol: udp
+        port_range_min: 4789
+        port_range_max: 4789
+
+  ocp_node_host:
+    depends_on: [network, ocp_bastion_host, node_security_group]
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: {get_param: node_count}
+      resource_def:
+        type: node.yaml
+        properties:
+          hostname:
+            str_replace:
+              template: "{{prefix}}-node-%index%"
+              params:
+                "{{prefix}}": {get_param: name_prefix}
+          domain_name: {get_param: domain_name}
+          dns_nameservers: {get_param: dns_nameservers}
+          #TODO: Add bastion_host keypair instead of Ansible Keypair
+          key_name: {get_param: ssh_key_name}
+          image: {get_param: node_image}
+          flavor: {get_param: node_flavor}
+          service_subnet: {get_attr: [network, service_subnet_id]}
+          service_network: {get_attr: [network, service_network_id]}
+          cluster_network: {get_attr: [network, cluster_network_id]}
+          cluster_subnet: {get_attr: [network, cluster_subnet_id]}
+          docker_volume_size: {get_param: node_docker_volume_size}
+          bastion_keypair: {get_attr: [ocp_bastion_host, public_key]}
+          security_group: {get_resource: node_security_group}
+
 outputs:
 
 ################
@@ -368,29 +443,28 @@ outputs:
 #################
 ## masters
 #
-#  master_ips:
-#    description: The ip address for all master nodes
-#    value:
-#      master_fip:
-#        { get_attr: [ocp_master_host, master_floating_ip]}
-#      master_sip:
-#        { get_attr: [ocp_master_host, master_service_ip]}
-#      master_cip:
-#        { get_attr: [ocp_master_host, master_cluster_ip]}
-#
-#  master_fip:
-#    value:
-#      { get_attr: [ocp_master_host, master_floating_ip]}
-#
-#  master_hostname:
-#    value:
-#      { get_attr: [ocp_master_host, master_hostname]}
-#
-#  master_sip:
-#    value:
-#      { get_attr: [ocp_master_host, master_service_ip]}
-#
-#  master_cip:
-#    value:
-#      { get_attr: [ocp_master_host, master_cluster_ip]}
-#
+  master_ips:
+    description: The ip address for all infra nodes
+    value:
+      infra_fip:
+        { get_attr: [ocp_infra_host, infra_floating_ip]}
+      infra_sip:
+        { get_attr: [ocp_infra_host, infra_service_ip]}
+      infra_cip:
+        { get_attr: [ocp_infra_host, infra_cluster_ip]}
+
+  master_fip:
+    value:
+      { get_attr: [ocp_master_host, master_floating_ip]}
+
+  master_hostname:
+    value:
+      { get_attr: [ocp_master_host, master_hostname]}
+
+  master_sip:
+    value:
+      { get_attr: [ocp_master_host, master_service_ip]}
+
+  master_cip:
+    value:
+      { get_attr: [ocp_master_host, master_cluster_ip]}

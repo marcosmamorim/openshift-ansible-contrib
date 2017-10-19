@@ -17,3 +17,10 @@ parameters:
   master_image: rhel73
   master_flavor: m1.tiny
   master_docker_volume_size: 10
+
+  node_count: 1
+  node_image: rhel73
+  node_flavor: m1.tiny
+  node_docker_volume_size: 10
+
+
