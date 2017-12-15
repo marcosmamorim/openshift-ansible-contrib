@@ -17,7 +17,7 @@
     ssh_user: cloud-user
     rhn_username: mamorim1@redhat.com
     rhn_pool: 8a85f9874011071c01407da00b997cb2
-    rhn_password: Sophia@2005!
+    rhn_password: XXXXXXX
 
   tasks:
     - name: check config file
